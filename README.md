@@ -5,7 +5,6 @@ A C program that connects to Anthropic's Claude API to analyze git diffs using y
 ## Features
 
 - Submit git diffs directly from the command line
-- Automatically detect ticket numbers (e.g., DOT-1234) from branch names
 - Use default API key and profile locations for ease of use
 - Save analysis results to a file in Markdown format
 - Debug mode for troubleshooting
@@ -17,7 +16,6 @@ A C program that connects to Anthropic's Claude API to analyze git diffs using y
 - C99-compatible compiler (gcc, clang)
 - libcurl for HTTP requests
 - cJSON for JSON parsing
-- regex.h support
 - POSIX-compatible system (Linux, macOS, etc.)
 
 ## Installation
@@ -78,15 +76,6 @@ Examples:
   git-commit-ai -d changes.diff                    # Read diff from file
   git-commit-ai -o commit_message.md "$(git diff)" # Save to file
 ```
-
-### Ticket Number Detection
-
-The program automatically detects ticket numbers in your branch name that match the pattern DOT-XXXX (where XXXX is a 4-digit number) and includes them in the commit message. For example:
-
-- If your branch is named `feature/DOT-1234-add-new-feature`, the program will extract `DOT-1234`
-- If your branch is named `hotfix/DOT-5678-fix-critical-bug`, the program will extract `DOT-5678`
-
-This happens automatically without any additional configuration.
 
 ### Default File Locations
 
@@ -159,9 +148,8 @@ git config --global alias.claude-commit '!git diff | git-commit-ai -o commit_msg
 
 When you use this command:
 1. The program will extract the current git diff
-2. Detect any ticket numbers (DOT-XXXX) in your current branch name
-3. Send both to Claude for analysis
-4. Save the resulting commit message with the ticket reference to commit_msg.md
+2. Send it to Claude for analysis
+3. Save the resulting commit message to commit_msg.md
 
 ## Error Handling
 
@@ -171,7 +159,6 @@ The application includes comprehensive error handling for:
 - Network request failures (with timeout handling)
 - JSON parsing errors
 - API response validation
-- Regex pattern matching failures
 
 ## Development
 
@@ -190,8 +177,6 @@ To run the basic functionality tests:
 ```bash
 ./test_claude_client.sh ~/.config/claude/api_key.txt
 ```
-
-The test script includes specific tests for the DOT-XXXX pattern detection feature.
 
 ## License
 
