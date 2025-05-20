@@ -38,12 +38,6 @@ check_dependency make || DEPS_OK=false
 check_lib libcurl.so || DEPS_OK=false
 check_lib libcjson.so || DEPS_OK=false
 
-# New check for regex support
-if ! grep -q 'REGEX' /usr/include/regex.h 2>/dev/null; then
-    echo -e "${RED}Error: regex.h header not found or incomplete.${NC}"
-    DEPS_OK=false
-fi
-
 if [ "$DEPS_OK" = false ]; then
     echo -e "${RED}Missing dependencies. Please install them first.${NC}"
     echo "On Debian/Ubuntu: sudo apt-get install build-essential libcurl4-openssl-dev libcjson-dev"
@@ -180,10 +174,6 @@ if [ "$GIT_INTEGRATION" = "y" ] || [ "$GIT_INTEGRATION" = "Y" ]; then
     echo "The program will automatically:"
     echo "  - Use your API key from $API_KEY_PATH"
     echo "  - Use your profile from $PROFILE_PATH"
-    echo "  - Extract ticket numbers like DOT-1234 from your branch name"
 fi
 
 echo -e "${GREEN}Installation process completed!${NC}"
-echo -e "${YELLOW}New feature:${NC}"
-echo "  When your branch name contains a pattern like DOT-1234,"
-echo "  it will automatically be included in the commit message."

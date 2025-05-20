@@ -16,7 +16,6 @@
 #include <time.h>
 #include <stdarg.h>
 #include <pwd.h>
-#include <regex.h>
 
 /* Debug mode flag */
 int debug_mode = 0;
@@ -30,12 +29,10 @@ int file_exists(const char* file_path);
 char* read_file(const char* file_path);
 void trim_string(char *str);
 char* read_api_key(const char* file_path);
-char* call_claude_api(const char* api_key, const char* profile, const char* git_diff, const char* dot_ticket);
+char* call_claude_api(const char* api_key, const char* profile, const char* git_diff);
 int parse_claude_response(const char* response, char** title, char** description);
 int save_results_to_file(const char* file_path, const char* title, const char* description);
 void display_help(const char* program_name);
-char* get_current_branch_name(void);
-char* extract_dot_pattern(const char* branch_name);
 
 // Structure to hold memory buffer for CURL responses
 struct MemoryStruct {
@@ -217,76 +214,8 @@ char* read_api_key(const char* file_path) {
     return api_key;
 }
 
-// Function to get the current git branch name
-char* get_current_branch_name(void) {
-    debug_print("Getting current git branch name");
-    
-    FILE *git_pipe = popen("git symbolic-ref --short HEAD 2>/dev/null", "r");
-    if (!git_pipe) {
-        debug_print("Failed to execute git command");
-        return NULL;
-    }
-    
-    char buffer[256];
-    char *branch_name = NULL;
-    
-    if (fgets(buffer, sizeof(buffer), git_pipe) != NULL) {
-        // Remove trailing newline
-        size_t len = strlen(buffer);
-        if (len > 0 && buffer[len-1] == '\n') {
-            buffer[len-1] = '\0';
-        }
-        
-        branch_name = str_duplicate(buffer);
-        debug_print("Current branch: %s", branch_name);
-    } else {
-        debug_print("Could not read branch name");
-    }
-    
-    pclose(git_pipe);
-    return branch_name;
-}
-
-// Function to extract DOT-XXXX pattern from branch name
-char* extract_dot_pattern(const char* branch_name) {
-    if (!branch_name) {
-        return NULL;
-    }
-    
-    debug_print("Extracting DOT-XXXX pattern from branch name: %s", branch_name);
-    
-    regex_t regex;
-    regmatch_t matches[1];
-    char *result = NULL;
-    
-    // Compile the regular expression
-    if (regcomp(&regex, "DOT-[0-9][0-9][0-9][0-9]", REG_EXTENDED) != 0) {
-        debug_print("Failed to compile regex");
-        return NULL;
-    }
-    
-    // Execute the regex
-    if (regexec(&regex, branch_name, 1, matches, 0) == 0) {
-        int start = matches[0].rm_so;
-        int end = matches[0].rm_eo;
-        int length = end - start;
-        
-        result = (char*)malloc(length + 1);
-        if (result) {
-            strncpy(result, branch_name + start, length);
-            result[length] = '\0';
-            debug_print("Found DOT pattern: %s", result);
-        }
-    } else {
-        debug_print("No DOT-XXXX pattern found in branch name");
-    }
-    
-    regfree(&regex);
-    return result;
-}
-
 // Function to make a request to Claude API
-char* call_claude_api(const char* api_key, const char* profile, const char* git_diff, const char* dot_ticket) {
+char* call_claude_api(const char* api_key, const char* profile, const char* git_diff) {
     debug_print("Preparing API request");
 
     CURL *curl;
@@ -332,21 +261,11 @@ char* call_claude_api(const char* api_key, const char* profile, const char* git_
 
     cJSON_AddStringToObject(message, "role", "user");
 
-    // Construct the content string with DOT ticket info if available
-    const char *content_template;
-    if (dot_ticket && strlen(dot_ticket) > 0) {
-        content_template = "Here is my profile:\n\n%s\n\nHere is a git diff for ticket %s that needs review:\n\n%s\n\nPlease provide a concise title and description of the changes, referencing %s in the title.";
-    } else {
-        content_template = "Here is my profile:\n\n%s\n\nHere is a git diff that needs review:\n\n%s\n\nPlease provide a concise title and description of the changes.";
-    }
+    // Construct the content string
+    const char *content_template = "Here is my profile:\n\n%s\n\nHere is a git diff that needs review:\n\n%s\n\nPlease provide a concise title and description of the changes.";
 
     // Calculate the length needed for the content string
-    int content_len;
-    if (dot_ticket && strlen(dot_ticket) > 0) {
-        content_len = snprintf(NULL, 0, content_template, profile, dot_ticket, git_diff, dot_ticket);
-    } else {
-        content_len = snprintf(NULL, 0, content_template, profile, git_diff);
-    }
+    int content_len = snprintf(NULL, 0, content_template, profile, git_diff);
     
     char *content = malloc(content_len + 1);
     if (!content) {
@@ -357,14 +276,7 @@ char* call_claude_api(const char* api_key, const char* profile, const char* git_
     }
 
     // Format the content string
-    if (dot_ticket && strlen(dot_ticket) > 0) {
-        snprintf(content, content_len + 1, content_template, profile, dot_ticket, git_diff, dot_ticket);
-        debug_print("Including DOT ticket %s in request", dot_ticket);
-    } else {
-        snprintf(content, content_len + 1, content_template, profile, git_diff);
-        debug_print("No DOT ticket found, using standard request");
-    }
-
+    snprintf(content, content_len + 1, content_template, profile, git_diff);
     debug_print("Content length: %d bytes", content_len);
 
     cJSON_AddStringToObject(message, "content", content);
@@ -782,22 +694,6 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    // Get current branch name and extract DOT-XXXX pattern
-    char *branch_name = get_current_branch_name();
-    char *dot_ticket = NULL;
-    
-    if (branch_name) {
-        dot_ticket = extract_dot_pattern(branch_name);
-        if (dot_ticket) {
-            printf("Found ticket ID in branch name: %s\n", dot_ticket);
-        } else {
-            printf("No ticket ID found in branch name: %s\n", branch_name);
-        }
-        free(branch_name); // Free branch_name as we don't need it anymore
-    } else {
-        printf("Could not determine current branch name\n");
-    }
-
     // Free paths if they were allocated
     if (use_default_key) {
         free(key_file_path);
@@ -808,13 +704,12 @@ int main(int argc, char* argv[]) {
 
     // Call Claude API
     printf("Sending request to Anthropic API...\n");
-    char *response = call_claude_api(api_key, profile, git_diff_content, dot_ticket);
+    char *response = call_claude_api(api_key, profile, git_diff_content);
     if (!response) {
         fprintf(stderr, "Failed to get response from Claude API\n");
         free(api_key);
         free(profile);
         free(git_diff_content);
-        if (dot_ticket) free(dot_ticket);
         return 1;
     }
 
@@ -823,7 +718,6 @@ int main(int argc, char* argv[]) {
     char *description = NULL;
     if (parse_claude_response(response, &title, &description)) {
         // Output result
-        // printf("\n===== CLAUDE ANALYSIS =====\n\n");
         printf("TITLE: %s\n\n", title);
         printf("DESCRIPTION:\n%s\n", description);
 
@@ -843,7 +737,6 @@ int main(int argc, char* argv[]) {
     free(profile);
     free(git_diff_content);
     free(response);
-    if (dot_ticket) free(dot_ticket);
 
     return 0;
 }
