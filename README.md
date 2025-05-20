@@ -1,4 +1,4 @@
-# Git Commit AI
+# Git Commit AI.
 
 A C program that connects to Anthropic's Claude API to analyze git diffs using your developer profile, providing concise titles and descriptions for changes.
 
